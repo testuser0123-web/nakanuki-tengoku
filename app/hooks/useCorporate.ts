@@ -7,7 +7,8 @@ export function useCorporate(
   priceTable: Decimal[],
   setAbecoinAmount: React.Dispatch<React.SetStateAction<Decimal>>,
   intervalTime: number,
-  upperProductivityRef: RefObject<Decimal> | null
+  upperProductivityRef: RefObject<Decimal> | null,
+  hiddenCoefficientRef: RefObject<Decimal>
 ) {
   const [power, setPower] = useState(() => new Decimal(1));
   const [funds, setFunds] = useState(() => new Decimal(0));
@@ -30,7 +31,11 @@ export function useCorporate(
     // 新しいインターバルをセット
     intervalRef.current = setInterval(() => {
       if (upperProductivityRef) {
-        setFunds((prev) => prev.plus(upperProductivityRef.current));
+        setFunds((prev) =>
+          prev.plus(
+            hiddenCoefficientRef.current.mul(upperProductivityRef.current)
+          )
+        );
       }
     }, intervalTime);
 
@@ -42,19 +47,23 @@ export function useCorporate(
     };
   }, [intervalTime]);
 
-  const upgrade = (): void => {
-    if (funds.equals(0)) {
-      setFunds(new Decimal(1));
+  const upgrade = (x: number): void => {
+    for (let i = 0; i < x; i++) {
+      if (funds.equals(0)) {
+        setFunds(new Decimal(1));
+        setAbecoinAmount((prev) =>
+          prev.minus(priceTable[Decimal.floor(order.dividedBy(10)).toNumber()])
+        );
+        setOrder((prev) => prev.plus(1));
+        return;
+      }
+      setPower((prev) => prev.mul(ROOT10OF2));
+      setFunds((prev) => prev.plus(1));
       setAbecoinAmount((prev) =>
         prev.minus(priceTable[Decimal.floor(order.dividedBy(10)).toNumber()])
       );
-      return;
+      setOrder((prev) => prev.plus(1));
     }
-    setPower((prev) => prev.mul(ROOT10OF2));
-    setAbecoinAmount((prev) =>
-      prev.minus(priceTable[Decimal.floor(order.dividedBy(10)).toNumber()])
-    );
-    setOrder((prev) => prev.plus(1));
   };
 
   return {
@@ -66,5 +75,6 @@ export function useCorporate(
     setOrder,
     upgrade,
     productivityRef,
+    internalIntervalRef: intervalRef,
   };
 }
