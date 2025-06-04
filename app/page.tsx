@@ -8,6 +8,7 @@ import {
   SetStateAction,
   RefObject,
   Fragment,
+  use,
 } from "react";
 import Decimal from "decimal.js";
 import { formatJapaneseLargeNumber } from "./utils/currencyFormatter";
@@ -15,6 +16,10 @@ import { useCorporate } from "./hooks/useCorporate";
 import ProductionModal from "./modal";
 import { makePriceTable } from "./utils/priceTableMaker";
 
+const MAX_BOOST_COUNT = 500; // 最大の強化回数
+const ACCELERATION = 0.99; // 生産速度の加速度
+const TAX_RATE = 2;
+const COMEBACK_RATE = 3.16; // 輪廻転生の際に生産速度が倍になる倍率
 const INITIAL_ABECOIN = new Decimal("1e2");
 const INITIAL_NEXT_BOOST = {
   target: 4,
@@ -43,27 +48,69 @@ const PRICE_TABLES = [
   makePriceTable(9, 7),
   makePriceTable(11, 8),
   makePriceTable(13, 9),
-  makePriceTable(15, 10),
+  makePriceTable(35, 10),
 ];
 
 export default function Home() {
+  const [boostCount, setBoostCount] = useState(0);
+  const boostCountRef = useRef(boostCount);
+  useEffect(() => {
+    boostCountRef.current = boostCount;
+  }, [boostCount]);
   const [basetick, setBasetick] = useState(1);
+  const basetickRef = useRef(basetick);
+  useEffect(() => {
+    basetickRef.current = basetick;
+  }, [basetick]);
   const [showProduction, setShowProduction] = useState(false);
   const [production, setProduction] = useState(new Decimal(0));
   const [readyToShowModal, setReadyToShowModal] = useState(false);
   const productionRef = useRef(production);
   const [reincarnationCount, setReincarnationCount] = useState(0);
+  const reincarnationCountRef = useRef(reincarnationCount);
+  useEffect(() => {
+    reincarnationCountRef.current = reincarnationCount;
+  }, [reincarnationCount]);
   const [isAvailable, setIsAvailable] = useState(INITIAL_IS_AVAILABLE);
+  const isAvailableRef = useRef(isAvailable);
+  useEffect(() => {
+    isAvailableRef.current = isAvailable;
+  }, [isAvailable]);
   const [nextBoost, setNextBoost] = useState(INITIAL_NEXT_BOOST);
+  const nextBoostRef = useRef(nextBoost);
+  useEffect(() => {
+    nextBoostRef.current = nextBoost;
+  }, [nextBoost]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const isLoadedRef = useRef(isLoaded);
+  useEffect(() => {
+    isLoadedRef.current = isLoaded;
+  }, [isLoaded]);
   const [intervalTime, setIntervalTime] = useState(1000 / basetick);
+  const intervalTimeRef = useRef(intervalTime);
+  useEffect(() => {
+    intervalTimeRef.current = intervalTime;
+  }, [intervalTime]);
   const [abecoinAmount, setAbecoinAmount] = useState(() => INITIAL_ABECOIN);
+  const abecoinAmountRef = useRef(abecoinAmount);
+  useEffect(() => {
+    abecoinAmountRef.current = abecoinAmount;
+  }, [abecoinAmount]);
   const [requiredAbecoinToBoostInterval, setRequiredAbecoinToBoostInterval] =
     useState(() => new Decimal(1000));
+  const requiredAbecoinToBoostIntervalRef = useRef(
+    requiredAbecoinToBoostInterval
+  );
+  useEffect(() => {
+    requiredAbecoinToBoostIntervalRef.current = requiredAbecoinToBoostInterval;
+  }, [requiredAbecoinToBoostInterval]);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const [isInfinity, setIsInfinity] = useState(false);
   const [hiddenCoefficient, setHiddenCoefficient] = useState(new Decimal(1));
   const hiddenCoefficientRef = useRef(hiddenCoefficient);
+  useEffect(() => {
+    hiddenCoefficientRef.current = hiddenCoefficient;
+  }, [hiddenCoefficient]);
 
   const powerList: Decimal[] = Array(PRICE_TABLES.length).fill(new Decimal(4));
   const setPowerList: Dispatch<SetStateAction<Decimal>>[] = Array(
@@ -86,6 +133,18 @@ export default function Home() {
   const internalIntervalRefList: RefObject<NodeJS.Timeout | null>[] = Array(
     PRICE_TABLES.length
   ).fill(null);
+  const powerRef = useRef(powerList);
+  useEffect(() => {
+    powerRef.current = powerList;
+  }, [powerList]);
+  const fundsRef = useRef(fundsList);
+  useEffect(() => {
+    fundsRef.current = fundsList;
+  }, [fundsList]);
+  const orderRef = useRef(orderList);
+  useEffect(() => {
+    orderRef.current = orderList;
+  }, [orderList]);
 
   for (let i = PRICE_TABLES.length - 1; i >= 0; i--) {
     const {
@@ -116,10 +175,44 @@ export default function Home() {
     internalIntervalRefList[i] = internalIntervalRef;
   }
 
-  // 隠し係数の更新
+  // 1秒ごとにローカルストレージに保存
   useEffect(() => {
-    hiddenCoefficientRef.current = hiddenCoefficient;
-  }, [hiddenCoefficient]);
+    const saveData = () => {
+      localStorage.setItem("boostCount", boostCountRef.current.toString());
+      localStorage.setItem("basetick", basetickRef.current.toString());
+      localStorage.setItem(
+        "reincarnationCount",
+        reincarnationCountRef.current.toString()
+      );
+      localStorage.setItem(
+        "isAvailable",
+        JSON.stringify(isAvailableRef.current)
+      );
+      localStorage.setItem("nextBoost", JSON.stringify(nextBoostRef.current));
+      localStorage.setItem("intervalTime", intervalTimeRef.current.toString());
+      localStorage.setItem("abecoin", abecoinAmountRef.current.toString());
+      localStorage.setItem(
+        "requiredAbecoinToBoostInterval",
+        requiredAbecoinToBoostIntervalRef.current.toString()
+      );
+      localStorage.setItem(
+        "hiddenCoefficient",
+        hiddenCoefficientRef.current.toString()
+      );
+      localStorage.setItem("lastPlayedAt", Date.now().toString());
+      for (let i = 0; i < PRICE_TABLES.length; i++) {
+        localStorage.setItem(`power-${i + 1}`, powerRef.current[i].toString());
+        localStorage.setItem(`funds-${i + 1}`, fundsRef.current[i].toString());
+        localStorage.setItem(`order-${i + 1}`, orderRef.current[i].toString());
+      }
+    };
+    setInterval(() => {
+      console.log("Saving data to localStorage...");
+      if (isLoadedRef.current) {
+        saveData();
+      }
+    }, 1000);
+  }, []);
 
   // 隠し係数の更新
   useEffect(() => {
@@ -152,6 +245,14 @@ export default function Home() {
 
   // マウント時データを取得する
   useEffect(() => {
+    setBoostCount((prev) => {
+      const item = localStorage.getItem("boostCount");
+      if (item !== null) {
+        return Number(item);
+      } else {
+        return prev;
+      }
+    });
     setHiddenCoefficient((prev) => {
       const item = localStorage.getItem("hiddenCoefficient");
       if (item !== null) {
@@ -275,50 +376,6 @@ export default function Home() {
     }, 1000);
   }, []);
 
-  // データを保存する
-  useEffect(() => {
-    const saveData = () => {
-      if (isLoaded) {
-        localStorage.setItem(
-          "reincarnationCount",
-          reincarnationCount.toString()
-        );
-        localStorage.setItem("hiddenCoefficient", hiddenCoefficient.toString());
-        localStorage.setItem("lastPlayedAt", Date.now().toString());
-        localStorage.setItem("intervalTime", intervalTime.toString());
-        localStorage.setItem("abecoin", abecoinAmount.toString());
-        localStorage.setItem("isAvailable", JSON.stringify(isAvailable));
-        localStorage.setItem("nextBoost", JSON.stringify(nextBoost));
-        localStorage.setItem("basetick", basetick.toString());
-        for (let i = 0; i < PRICE_TABLES.length; i++) {
-          localStorage.setItem(`power-${i + 1}`, powerList[i].toString());
-          localStorage.setItem(`funds-${i + 1}`, fundsList[i].toString());
-          localStorage.setItem(`order-${i + 1}`, orderList[i].toString());
-        }
-        localStorage.setItem(
-          "requiredAbecoinToBoostInterval",
-          requiredAbecoinToBoostInterval.toString()
-        );
-      }
-    };
-    window.addEventListener("beforeunload", saveData);
-    window.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden") saveData();
-    });
-    return () => {
-      window.removeEventListener("beforeunload", saveData);
-      window.removeEventListener("visibilitychange", saveData);
-    };
-  }, [
-    isLoaded,
-    intervalTime,
-    abecoinAmount,
-    ...powerList,
-    ...fundsList,
-    ...orderList,
-    requiredAbecoinToBoostInterval,
-  ]);
-
   // 差分を計算
   useEffect(() => {
     if (isLoaded) {
@@ -357,19 +414,52 @@ export default function Home() {
   // 徴税ボタンの処理
   const collectTax = (): void => {
     setAbecoinAmount((prev) =>
-      prev.plus(productivityRefList[0].current.mul(10))
+      prev.plus(productivityRefList[0].current.mul(TAX_RATE))
     );
   };
 
   const boostInterval = (): void => {
+    if (boostCount >= MAX_BOOST_COUNT) {
+      alert("これ以上強化できません。");
+      return;
+    }
     setAbecoinAmount((prev) => prev.minus(requiredAbecoinToBoostInterval));
-    setIntervalTime((prev) => prev * 0.95);
+    setIntervalTime((prev) => prev * ACCELERATION);
+    setBoostCount((prev) => prev + 1);
     setRequiredAbecoinToBoostInterval((prev) => prev.mul(10));
+  };
+
+  const boostIntervalMax = (): void => {
+    let boostCountCache = boostCount;
+    let abecoinAmountCache = abecoinAmount;
+    let requiredAbecoinToBoostIntervalCache = requiredAbecoinToBoostInterval;
+    let intervalTimeCache = intervalTime;
+    while (
+      boostCountCache < MAX_BOOST_COUNT &&
+      abecoinAmountCache.greaterThanOrEqualTo(
+        requiredAbecoinToBoostIntervalCache
+      )
+    ) {
+      abecoinAmountCache = abecoinAmountCache.minus(
+        requiredAbecoinToBoostIntervalCache
+      );
+      intervalTimeCache = intervalTimeCache * ACCELERATION;
+      boostCountCache++;
+      requiredAbecoinToBoostIntervalCache =
+        requiredAbecoinToBoostIntervalCache.mul(10);
+    }
+    setAbecoinAmount(() => abecoinAmountCache);
+    setIntervalTime(() => intervalTimeCache);
+    setBoostCount(() => boostCountCache);
+    setRequiredAbecoinToBoostInterval(
+      () => requiredAbecoinToBoostIntervalCache
+    );
   };
 
   const resetProgress = (): void => {
     setReincarnationCount(0);
     setIntervalTime(1000);
+    setBoostCount(0);
     setHiddenCoefficient(new Decimal(1));
     setBasetick(1);
     setAbecoinAmount(new Decimal(INITIAL_ABECOIN));
@@ -391,8 +481,10 @@ export default function Home() {
         productionRef={productionRef}
       />
       <main className="flex flex-col items-center justify-center min-h-screen bg-gray-50 text-center p-4 gap-1">
-        <h1 className="text-3xl font-bold mb-4">美しい国、日本</h1>
-        <h2 className="flex items-center mb-2 text-base">
+        <h1 className="text-3xl font-bold mb-4">
+          美しい国、<span className="text-red-500">日本</span>
+        </h1>
+        <h2 className="flex items-center mb-2 text-sm">
           <div className="flex items-start gap-2">
             <span>現在の安倍コイン: </span>
             <span className="inline-block w-[5rem] text-start font-bold">
@@ -400,8 +492,9 @@ export default function Home() {
             </span>
           </div>
           <button
-            className="bg-purple-600 text-white p-2 rounded-md ml-4"
+            className="bg-purple-600 text-white p-2 rounded-md ml-4 disabled:bg-gray-400 disabled:cursor-not-allowed active:bg-purple-700"
             onClick={collectTax}
+            disabled={productivityRefList[0].current.equals(0)}
           >
             徴税
           </button>
@@ -419,27 +512,40 @@ export default function Home() {
             : ""}
         </h3>
         <hr className="my-2 border-gray-300 w-[90%] max-w-100" />
-        <div className="flex w-auto gap-10 items-center ">
-          <div className="flex flex-col items-start w-32 ">
-            <h3 className="text-base">生産速度 </h3>
-            <span className="text-sm text-start">
+        <div className="flex w-auto gap-10 items-center min-h-[84px]">
+          <div className="flex flex-col items-start">
+            <h3 className="text-sm">生産速度 </h3>
+            <span className="text-xs text-start">
               ×{(1000 / intervalTime).toFixed(2)}
             </span>
           </div>
-          <div className="w-24">
-            <button
-              onClick={boostInterval}
-              className="bg-green-600 text-white p-2 w-full rounded-md min-h-16 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              disabled={requiredAbecoinToBoostInterval.greaterThan(
-                abecoinAmount
-              )}
-            >
-              速度強化
-              <br />
-              <span className="text-xs">
-                {formatJapaneseLargeNumber(requiredAbecoinToBoostInterval)}
-              </span>
-            </button>
+          <div className="flex flex-col gap-2 items-start">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={boostInterval}
+                className="bg-green-600 text-white text-sm p-2 rounded-md min-h-8 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                disabled={
+                  requiredAbecoinToBoostInterval.greaterThan(abecoinAmount) ||
+                  MAX_BOOST_COUNT <= boostCount
+                }
+              >
+                速度強化
+                <br />
+              </button>
+              <button
+                onClick={boostIntervalMax}
+                className="text-sm bg-green-900 p-2 rounded-md text-white disabled:bg-gray-400 disabled:cursor-not-allowed min-h-8"
+                disabled={
+                  requiredAbecoinToBoostInterval.greaterThan(abecoinAmount) ||
+                  MAX_BOOST_COUNT <= boostCount
+                }
+              >
+                最大強化
+              </button>
+            </div>
+            <span className="text-xs/[0.5]">
+              {formatJapaneseLargeNumber(requiredAbecoinToBoostInterval)}
+            </span>
           </div>
         </div>
         {Array.from({ length: PRICE_TABLES.length }, (_, i) => i).map((i) => {
@@ -485,6 +591,7 @@ export default function Home() {
             setReincarnationCount={setReincarnationCount}
             setBasetick={setBasetick}
             setHiddenCoefficient={setHiddenCoefficient}
+            setBoostCount={setBoostCount}
           />
           <ReincarnationButton
             setRequiredAbecoinToBoostInterval={
@@ -504,6 +611,7 @@ export default function Home() {
             setReincarnationCount={setReincarnationCount}
             setBasetick={setBasetick}
             setHiddenCoefficient={setHiddenCoefficient}
+            setBoostCount={setBoostCount}
           />
         </div>
         <div className="h-20 flex flex-col justify-end">
@@ -572,13 +680,13 @@ const Corp: React.FC<CorpProps> = ({
   };
 
   return (
-    <div className="flex w-auto gap-10 items-center">
+    <div className="flex w-auto gap-10 items-center min-h-[84px]">
       <div className="flex flex-col items-start w-32">
-        <h3>{rank}</h3>
-        <p className="text-sm text-left">
+        <h3 className="text-sm">{rank}</h3>
+        <p className="text-xs text-left">
           生産力: ×{formatJapaneseLargeNumber(power)}
         </p>
-        <p className="text-sm text-left">
+        <p className="text-xs text-left">
           資金: {formatJapaneseLargeNumber(funds)}
         </p>
       </div>
@@ -586,7 +694,7 @@ const Corp: React.FC<CorpProps> = ({
         <button
           className={`${
             funds.equals(0) ? "bg-purple-600" : "bg-purple-400"
-          } p-2 rounded-md min-h-16 w-full disabled:bg-gray-400 disabled:cursor-not-allowed relative overfolow-hidden`}
+          } p-2 rounded-md min-h-8 w-full disabled:bg-gray-400 disabled:cursor-not-allowed relative overfolow-hidden`}
           onClick={() => upgrade(getMaxAffordablePurchases())}
           disabled={
             isMax ||
@@ -608,34 +716,34 @@ const Corp: React.FC<CorpProps> = ({
               }%`,
             }}
           ></div>
-          <span className="text-white relative z-10">
+          <span className="text-white relative z-10 text-sm">
             {isMax ? (
               "MAX"
             ) : (
               <>
                 {funds.equals(0) ? (
-                  <p>
-                    資金提供
-                    <br />
-                    <span className="text-xs">
-                      {formatJapaneseLargeNumber(
-                        priceTable[
-                          Decimal.floor(order.dividedBy(10)).toNumber()
-                        ] ?? new Decimal(0)
-                      )}
-                    </span>
-                  </p>
+                  <>
+                    <p>資金提供</p>
+                  </>
                 ) : (
-                  <p>
-                    生産力強化
-                    <br />
-                    <span className="text-xs">{getFormattedPrice()}</span>
-                  </p>
+                  <>
+                    <p>生産力強化</p>
+                  </>
                 )}
               </>
             )}
           </span>
         </button>
+        {funds.equals(0) ? (
+          <span className="text-xs">
+            {formatJapaneseLargeNumber(
+              priceTable[Decimal.floor(order.dividedBy(10)).toNumber()] ??
+                new Decimal(0)
+            )}
+          </span>
+        ) : (
+          <span className="text-xs">{getFormattedPrice()}</span>
+        )}
       </div>
     </div>
   );
@@ -736,6 +844,7 @@ type ButtonProps = {
   reincarnationCount: number;
   setReincarnationCount: Dispatch<SetStateAction<number>>;
   setHiddenCoefficient: Dispatch<SetStateAction<Decimal>>;
+  setBoostCount: Dispatch<SetStateAction<number>>;
 };
 
 const UnlockButton: React.FC<ButtonProps> = ({
@@ -751,8 +860,10 @@ const UnlockButton: React.FC<ButtonProps> = ({
   setRequiredAbecoinToBoostInterval,
   basetick,
   setHiddenCoefficient,
+  setBoostCount,
 }) => {
   const boost = () => {
+    setBoostCount(() => 0);
     setHiddenCoefficient(new Decimal(1));
     setRequiredAbecoinToBoostInterval(new Decimal(1000));
     setAbecoinAmount(() => INITIAL_ABECOIN);
@@ -801,7 +912,7 @@ const UnlockButton: React.FC<ButtonProps> = ({
         {nextBoost.requiredAmount.toString()}
       </p>
       <button
-        className="border p-2 rounded-md  disabled:bg-gray-400 disabled:cursor-not-allowed h-[120]"
+        className="border p-2 rounded-md  disabled:bg-gray-400 disabled:cursor-not-allowed h-[140]"
         onClick={boost}
         disabled={fundsList[nextBoost.required].lessThan(
           nextBoost.requiredAmount
@@ -835,12 +946,14 @@ const ReincarnationButton: React.FC<ButtonProps> = ({
   setReincarnationCount,
   setBasetick,
   setHiddenCoefficient,
+  setBoostCount,
 }) => {
   const reincarnate = () => {
+    setBoostCount(() => 0);
     setAbecoinAmount(INITIAL_ABECOIN);
     setHiddenCoefficient(new Decimal(1));
     setIsAvailable(INITIAL_IS_AVAILABLE);
-    setIntervalTime(1000 / (basetick * 2));
+    setIntervalTime(1000 / (basetick * COMEBACK_RATE));
     setNextBoost(INITIAL_NEXT_BOOST);
     setRequiredAbecoinToBoostInterval(new Decimal(1000));
     setReincarnationCount((prev) => ++prev);
@@ -850,7 +963,7 @@ const ReincarnationButton: React.FC<ButtonProps> = ({
       setOrderList[i](() => new Decimal(0));
     }
 
-    setBasetick((prev) => prev * 2);
+    setBasetick((prev) => prev * COMEBACK_RATE);
   };
 
   return (
@@ -859,7 +972,7 @@ const ReincarnationButton: React.FC<ButtonProps> = ({
         条件: 8次請け 資金 {80 + reincarnationCount * 60}
       </p>
       <button
-        className="border p-2 rounded-md  disabled:bg-gray-400 disabled:cursor-not-allowed h-[120]"
+        className="border p-2 rounded-md  disabled:bg-gray-400 disabled:cursor-not-allowed h-[140]"
         disabled={
           !fundsList[7].greaterThanOrEqualTo(80 + reincarnationCount * 60)
         }
@@ -871,7 +984,8 @@ const ReincarnationButton: React.FC<ButtonProps> = ({
           </ruby>
         </h3>
         <p className="text-xs">
-          安倍コイン、生産力、資産、生産速度をリセットし、 生産速度を2倍にする。
+          安倍コイン、生産力、資産、生産速度をリセットし、 生産速度を
+          {COMEBACK_RATE}倍にする。
         </p>
         <span className="text-xs"></span>
       </button>
