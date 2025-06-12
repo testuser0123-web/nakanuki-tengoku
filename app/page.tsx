@@ -127,6 +127,9 @@ export default function Home() {
   const upgradeList: ((x: number) => void)[] = Array(PRICE_TABLES.length).fill(
     () => {}
   );
+  const maxUpgradeList: (() => void)[] = Array(PRICE_TABLES.length).fill(
+    () => {}
+  );
   const productivityRefList: RefObject<Decimal>[] = Array(
     PRICE_TABLES.length
   ).fill(new Decimal(4));
@@ -155,10 +158,12 @@ export default function Home() {
       order,
       setOrder,
       upgrade,
+      maxUpgrade,
       productivityRef,
       internalIntervalRef,
     } = useCorporate(
       PRICE_TABLES[i],
+      abecoinAmount,
       setAbecoinAmount,
       intervalTime,
       i === PRICE_TABLES.length - 1 ? null : productivityRefList[i + 1],
@@ -171,6 +176,7 @@ export default function Home() {
     orderList[i] = order;
     setOrderList[i] = setOrder;
     upgradeList[i] = upgrade;
+    maxUpgradeList[i] = maxUpgrade;
     productivityRefList[i] = productivityRef;
     internalIntervalRefList[i] = internalIntervalRef;
   }
@@ -492,7 +498,7 @@ export default function Home() {
             </span>
           </div>
           <button
-            className="bg-purple-600 text-white p-2 rounded-md ml-4 disabled:bg-gray-400 disabled:cursor-not-allowed active:bg-purple-700"
+            className="bg-purple-600 text-white text-sm px-2 py-2 rounded-md h-[32px] ml-4 disabled:bg-gray-400 disabled:cursor-not-allowed active:bg-purple-700 flex items-center justify-center"
             onClick={collectTax}
             disabled={productivityRefList[0].current.equals(0)}
           >
@@ -519,22 +525,21 @@ export default function Home() {
               ×{(1000 / intervalTime).toFixed(2)}
             </span>
           </div>
-          <div className="flex flex-col gap-2 items-start">
+          <div className="flex flex-col gap-2 items-start justify-center">
             <div className="flex items-center gap-2">
               <button
                 onClick={boostInterval}
-                className="bg-green-600 text-white text-sm p-2 rounded-md min-h-8 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="bg-green-600 text-white text-sm px-2 py-2 rounded-md h-[32px] disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
                 disabled={
                   requiredAbecoinToBoostInterval.greaterThan(abecoinAmount) ||
                   MAX_BOOST_COUNT <= boostCount
                 }
               >
                 速度強化
-                <br />
               </button>
               <button
                 onClick={boostIntervalMax}
-                className="text-sm bg-green-900 p-2 rounded-md text-white disabled:bg-gray-400 disabled:cursor-not-allowed min-h-8"
+                className="text-sm bg-green-900 px-2 py-2 rounded-md text-white disabled:bg-gray-400 disabled:cursor-not-allowed h-[32px] flex items-center justify-center"
                 disabled={
                   requiredAbecoinToBoostInterval.greaterThan(abecoinAmount) ||
                   MAX_BOOST_COUNT <= boostCount
@@ -543,7 +548,7 @@ export default function Home() {
                 最大強化
               </button>
             </div>
-            <span className="text-xs/[0.5]">
+            <span className="text-xs leading-3">
               {formatJapaneseLargeNumber(requiredAbecoinToBoostInterval)}
             </span>
           </div>
@@ -562,6 +567,7 @@ export default function Home() {
                     power={powerList[i]}
                     funds={fundsList[i]}
                     upgrade={upgradeList[i]}
+                    maxUpgrade={maxUpgradeList[i]}
                     order={orderList[i]}
                     abecoinAmount={abecoinAmount}
                     priceTable={PRICE_TABLES[i]}
@@ -627,6 +633,7 @@ type CorpProps = {
   power: Decimal;
   funds: Decimal;
   upgrade: (x: number) => void;
+  maxUpgrade: () => void;
   order: Decimal;
   abecoinAmount: Decimal;
   priceTable: Decimal[];
@@ -637,6 +644,7 @@ const Corp: React.FC<CorpProps> = ({
   power,
   funds,
   upgrade,
+  maxUpgrade,
   order,
   abecoinAmount,
   priceTable,
@@ -681,7 +689,7 @@ const Corp: React.FC<CorpProps> = ({
 
   return (
     <div className="flex w-auto gap-10 items-center min-h-[84px]">
-      <div className="flex flex-col items-start w-32">
+      <div className="flex flex-col items-start w-32 gap-1">
         <h3 className="text-sm">{rank}</h3>
         <p className="text-xs text-left">
           生産力: ×{formatJapaneseLargeNumber(power)}
@@ -690,50 +698,52 @@ const Corp: React.FC<CorpProps> = ({
           資金: {formatJapaneseLargeNumber(funds)}
         </p>
       </div>
-      <div className="w-24">
-        <button
-          className={`${
-            funds.equals(0) ? "bg-purple-600" : "bg-purple-400"
-          } p-2 rounded-md min-h-8 w-full disabled:bg-gray-400 disabled:cursor-not-allowed relative overfolow-hidden`}
-          onClick={() => upgrade(getMaxAffordablePurchases())}
-          disabled={
-            isMax ||
-            abecoinAmount.lessThan(
-              priceTable[Decimal.floor(order.dividedBy(10)).toNumber()] ??
-                new Decimal(0)
-            )
-          }
-        >
-          {/* 塗りつぶし部分 */}
-          <div
-            className="absolute top-0 left-0 h-full rounded-md bg-purple-600"
-            style={{
-              width: `${
-                funds.equals(0)
-                  ? 0
-                  : (getMaxAffordablePurchases() + order.mod(10).toNumber()) *
-                    10
-              }%`,
-            }}
-          ></div>
-          <span className="text-white relative z-10 text-sm">
-            {isMax ? (
-              "MAX"
-            ) : (
-              <>
-                {funds.equals(0) ? (
-                  <>
-                    <p>資金提供</p>
-                  </>
-                ) : (
-                  <>
-                    <p>生産力強化</p>
-                  </>
-                )}
-              </>
-            )}
-          </span>
-        </button>
+      <div className="w-48 flex flex-col items-start gap-1">
+        <div className="flex items-center gap-2">
+          <button
+            className={`${
+              funds.equals(0) ? "bg-purple-600" : "bg-purple-400"
+            } px-2 py-2 rounded-md h-[32px] disabled:bg-gray-400 disabled:cursor-not-allowed relative overflow-hidden flex items-center justify-center`}
+            onClick={() => upgrade(getMaxAffordablePurchases())}
+            disabled={
+              isMax ||
+              abecoinAmount.lessThan(
+                priceTable[Decimal.floor(order.dividedBy(10)).toNumber()] ??
+                  new Decimal(0)
+              )
+            }
+          >
+            {/* 塗りつぶし部分 */}
+            <div
+              className="absolute top-0 left-0 h-full rounded-md bg-purple-600"
+              style={{
+                width: `${
+                  funds.equals(0)
+                    ? 0
+                    : (getMaxAffordablePurchases() + order.mod(10).toNumber()) *
+                      10
+                }%`,
+              }}
+            ></div>
+            <span className="text-white relative z-10 text-sm">
+              {isMax ? "MAX" : funds.equals(0) ? "資金提供" : "生産力強化"}
+            </span>
+          </button>
+          <button
+            onClick={maxUpgrade}
+            disabled={
+              funds.equals(0) ||
+              isMax ||
+              abecoinAmount.lessThan(
+                priceTable[Decimal.floor(order.dividedBy(10)).toNumber()] ??
+                  new Decimal(0)
+              )
+            }
+            className="bg-purple-800 text-white text-sm px-2 py-2 rounded-md h-[32px] disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
+          >
+            最大強化
+          </button>
+        </div>
         {funds.equals(0) ? (
           <span className="text-xs">
             {formatJapaneseLargeNumber(
@@ -912,7 +922,7 @@ const UnlockButton: React.FC<ButtonProps> = ({
         {nextBoost.requiredAmount.toString()}
       </p>
       <button
-        className="border p-2 rounded-md  disabled:bg-gray-400 disabled:cursor-not-allowed h-[140]"
+        className="border px-3 py-3 rounded-md disabled:bg-gray-400 disabled:cursor-not-allowed h-[140px] flex flex-col items-center justify-center text-center"
         onClick={boost}
         disabled={fundsList[nextBoost.required].lessThan(
           nextBoost.requiredAmount
@@ -924,7 +934,6 @@ const UnlockButton: React.FC<ButtonProps> = ({
           {nextBoost.benefitTarget.map((n) => `${n + 1}次`).join("、")}
           請け企業の生産力を2倍にする。
         </p>
-        <span className="text-xs"></span>
       </button>
     </div>
   );
@@ -972,7 +981,7 @@ const ReincarnationButton: React.FC<ButtonProps> = ({
         条件: 8次請け 資金 {80 + reincarnationCount * 60}
       </p>
       <button
-        className="border p-2 rounded-md  disabled:bg-gray-400 disabled:cursor-not-allowed h-[140]"
+        className="border px-3 py-3 rounded-md disabled:bg-gray-400 disabled:cursor-not-allowed h-[140px] flex flex-col items-center justify-center text-center"
         disabled={
           !fundsList[7].greaterThanOrEqualTo(80 + reincarnationCount * 60)
         }
@@ -987,7 +996,6 @@ const ReincarnationButton: React.FC<ButtonProps> = ({
           安倍コイン、生産力、資産、生産速度をリセットし、 生産速度を
           {COMEBACK_RATE}倍にする。
         </p>
-        <span className="text-xs"></span>
       </button>
     </div>
   );

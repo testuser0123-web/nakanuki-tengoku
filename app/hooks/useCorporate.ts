@@ -5,6 +5,7 @@ const ROOT10OF2 = Math.pow(2, 1 / 10);
 
 export function useCorporate(
   priceTable: Decimal[],
+  abecoinAmount: Decimal,
   setAbecoinAmount: React.Dispatch<React.SetStateAction<Decimal>>,
   intervalTime: number,
   upperProductivityRef: RefObject<Decimal> | null,
@@ -66,6 +67,29 @@ export function useCorporate(
     }
   };
 
+  const maxUpgrade = (): void => {
+    let tmpPower = power;
+    let tmpFunds = funds;
+    let tmpOrder = order;
+    let tmpAbecoinAmount = abecoinAmount;
+    while (
+      tmpAbecoinAmount.greaterThanOrEqualTo(
+        priceTable[Decimal.floor(tmpOrder.dividedBy(10)).toNumber()]
+      )
+    ) {
+      tmpPower = tmpPower.mul(ROOT10OF2);
+      tmpFunds = tmpFunds.plus(1);
+      tmpAbecoinAmount = tmpAbecoinAmount.minus(
+        priceTable[Decimal.floor(tmpOrder.dividedBy(10)).toNumber()]
+      );
+      tmpOrder = tmpOrder.plus(1);
+    }
+    setPower(tmpPower);
+    setFunds(tmpFunds);
+    setAbecoinAmount(tmpAbecoinAmount);
+    setOrder(tmpOrder);
+  };
+
   return {
     power,
     setPower,
@@ -74,6 +98,7 @@ export function useCorporate(
     order,
     setOrder,
     upgrade,
+    maxUpgrade,
     productivityRef,
     internalIntervalRef: intervalRef,
   };
