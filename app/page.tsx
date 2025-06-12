@@ -16,7 +16,7 @@ import { useCorporate } from "./hooks/useCorporate";
 import ProductionModal from "./modal";
 import { makePriceTable } from "./utils/priceTableMaker";
 
-const MAX_BOOST_COUNT = 500; // 最大の強化回数
+const MAX_BOOST_COUNT = 100000; // 最大の強化回数
 const ACCELERATION = 0.99; // 生産速度の加速度
 const TAX_RATE = 2;
 const COMEBACK_RATE = 3.16; // 輪廻転生の際に生産速度が倍になる倍率
